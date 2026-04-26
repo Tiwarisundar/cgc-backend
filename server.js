@@ -3,7 +3,6 @@ const cors       = require('cors');
 const nodemailer = require('nodemailer');
 const rateLimit  = require('express-rate-limit');
 const { google } = require('googleapis');
-const axios      = require('axios');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -14,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(cors({
   origin: [
-    'https://cgc-lko.42web.io',   // ✅ Bug fix: double https hata diya
+    'https://cgc-lko.42web.io',
     'http://localhost',
     'http://127.0.0.1'
   ]
@@ -42,9 +41,8 @@ const transporter = nodemailer.createTransport({
 // ══════════════════════════════
 //  GOOGLE SHEETS SETUP
 // ══════════════════════════════
-const SHEET_ID = process.env.GOOGLE_SHEET_ID; // Render env variable
+const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
-// Service Account credentials — JSON file ka content
 const credentials = {
   type: 'service_account',
   project_id:   process.env.GCP_PROJECT_ID,
@@ -75,33 +73,6 @@ async function addToSheet(sheetName, rowData) {
     return true;
   } catch (err) {
     console.error('❌ Sheet error:', err.message);
-    return false; // Sheet fail ho toh bhi email jaayegi
-  }
-}
-
-// ══════════════════════════════
-//  RECAPTCHA VERIFY FUNCTION
-// ══════════════════════════════
-async function verifyCaptcha(token) {
-  try {
-    const response = await axios.post(
-      'https://www.google.com/recaptcha/api/siteverify',
-      null,
-      {
-        params: {
-          secret:   process.env.RECAPTCHA_SECRET,
-          response: token
-        }
-      }
-    );
-
-    const { success, score } = response.data;
-    console.log(`Captcha score: ${score}`); // 0.0 = bot, 1.0 = human
-
-    // 0.5 se upar = human maano
-    return success && score >= 0.5;
-  } catch (err) {
-    console.error('Captcha verify error:', err.message);
     return false;
   }
 }
@@ -113,7 +84,7 @@ app.get('/', (req, res) => {
   res.json({ 
     status: 'CGC Backend chal raha hai! ✅',
     version: '2.0',
-    features: ['Email', 'Google Sheets', 'reCAPTCHA v3']
+    features: ['Email', 'Google Sheets']
   });
 });
 
@@ -121,7 +92,7 @@ app.get('/', (req, res) => {
 //  API 1: CONTACT FORM
 // ══════════════════════════════
 app.post('/api/contact', async (req, res) => {
-  const { name, email, phone, message, captcha_token } = req.body;
+  const { name, email, phone, message } = req.body;
 
   // 1. Validation
   if (!name || !email || !message) {
@@ -131,35 +102,26 @@ app.post('/api/contact', async (req, res) => {
     });
   }
 
-  // 2. reCAPTCHA verify
-  const isHuman = await verifyCaptcha(captcha_token);
-  if (!isHuman) {
-    return res.status(403).json({ 
-      success: false, 
-      message: 'Captcha verify nahi hua. Spam bot detected! 🤖' 
-    });
-  }
-
   const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
   try {
-    // 3. Google Sheet mein save karo
+    // 2. Google Sheet mein save karo
     await addToSheet('Contacts', [
       timestamp,
       'Contact Form',
       name,
       email,
       phone || 'N/A',
-      '',         // College (N/A for contact)
-      '',         // Department
+      '',
+      '',
       message,
-      'New'       // Status
+      'New'
     ]);
 
-    // 4. Admin ko email
+    // 3. Admin ko email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: 'tiwarisundarm68@gmail.com',  // ✅ Bug fix: double dot hata diya
+      to: 'tiwarisundarm68@gmail.com',
       subject: `📩 New Contact: ${name}`,
       html: `
         <div style="font-family:Arial;max-width:600px;margin:auto;border:2px solid #001a56;border-radius:10px;overflow:hidden">
@@ -179,7 +141,7 @@ app.post('/api/contact', async (req, res) => {
       `
     });
 
-    // 5. User ko confirmation
+    // 4. User ko confirmation
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
@@ -215,7 +177,7 @@ app.post('/api/contact', async (req, res) => {
 app.post('/api/apply', async (req, res) => {
   const { 
     contact_type, college, application_type, submission_mode,
-    student_name, student_email, student_phone, captcha_token
+    student_name, student_email, student_phone
   } = req.body;
 
   // 1. Validation
@@ -226,19 +188,10 @@ app.post('/api/apply', async (req, res) => {
     });
   }
 
-  // 2. reCAPTCHA verify
-  const isHuman = await verifyCaptcha(captcha_token);
-  if (!isHuman) {
-    return res.status(403).json({ 
-      success: false, 
-      message: 'Captcha verify nahi hua. 🤖' 
-    });
-  }
-
   const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
   try {
-    // 3. Google Sheet mein save karo
+    // 2. Google Sheet mein save karo
     await addToSheet('Applications', [
       timestamp,
       'Application Form',
@@ -248,10 +201,10 @@ app.post('/api/apply', async (req, res) => {
       college,
       application_type,
       contact_type,
-      'Pending'   // Status
+      'Pending'
     ]);
 
-    // 4. Admin ko email
+    // 3. Admin ko email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: 'tiwarisundarm68@gmail.com',
@@ -277,7 +230,7 @@ app.post('/api/apply', async (req, res) => {
       `
     });
 
-    // 5. Student ko confirmation
+    // 4. Student ko confirmation
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: student_email,
@@ -315,7 +268,7 @@ app.post('/api/search', (req, res) => {
 
   const courses = {
     'Law':        ['LLB (3 Year)', 'LLB (5 Year Integrated)', 'LLM'],
-    'Management': ['BBA', 'MBA', 'PGDM', 'BCA', 'MCA'],  // ✅ Bug fix: comma add kiya
+    'Management': ['BBA', 'MBA', 'PGDM', 'BCA', 'MCA'],
     'Nursing':    ['B.Sc Nursing', 'GNM', 'ANM'],
     'Pharmacy':   ['B.Pharma', 'D.Pharma', 'M.Pharma'],
     'ITI':        ['Diploma in IT', 'Diploma in CS', 'Diploma in Optometry']
