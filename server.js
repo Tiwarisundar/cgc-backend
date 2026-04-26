@@ -11,13 +11,19 @@ const PORT = process.env.PORT || 3000;
 //  MIDDLEWARE
 // ══════════════════════════════
 app.use(express.json());
+
+// CORS — sabhi origins allow karo (42web, localhost, any domain)
 app.use(cors({
-  origin: [
-    'https://cgc-lko.42web.io',
-    'http://localhost',
-    'http://127.0.0.1'
-  ]
+  origin: function(origin, callback) {
+    // origin null hota hai same-origin ya Postman requests pe — allow karo
+    callback(null, true);
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Preflight OPTIONS request handle karo
+app.options('*', cors());
 
 // Rate limiting — spam se bachao
 const limiter = rateLimit({
@@ -166,8 +172,11 @@ app.post('/api/contact', async (req, res) => {
     res.json({ success: true, message: 'Message bhej diya gaya! ✅' });
 
   } catch (error) {
-    console.error('Contact API error:', error);
-    res.status(500).json({ success: false, message: 'Error aaya. Baad mein try karo.' });
+    console.error('Contact API error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error: ' + error.message 
+    });
   }
 });
 
@@ -255,8 +264,11 @@ app.post('/api/apply', async (req, res) => {
     res.json({ success: true, message: 'Application submit ho gayi! ✅' });
 
   } catch (error) {
-    console.error('Application API error:', error);
-    res.status(500).json({ success: false, message: 'Error aaya. Baad mein try karo.' });
+    console.error('Application API error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error: ' + error.message 
+    });
   }
 });
 
